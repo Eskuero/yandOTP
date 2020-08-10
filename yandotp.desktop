@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=yandOTP
+Exec=yandOTP
+Type=Application
+Categories=GTK;
+Icon=application-pgp-encrypted

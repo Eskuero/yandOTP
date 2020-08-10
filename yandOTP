@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+import subprocess
+import json
+import sys
+
+# First ask the user for a file
+selectfile = subprocess.Popen(["yad", "--title", "yandOTP", "--text", "Select your PGP encrypted backup", "--file"], stdout = subprocess.PIPE)
+database = selectfile.communicate()[0].decode().strip()
+
+# Stop if the user cancelled
+if selectfile.returncode == 1:
+	sys.exit(0)
+
+# Try to decrypt it using gpg
+decrypt = subprocess.Popen(["gpg", "--decrypt", "-o", "-", database], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+data, error = decrypt.communicate()
+
+# If for some reason we are unable to read a valid json we output the gpg error (invalid password, no pgp data, not really a json formatted file...)
+try:
+	dictionary = json.loads(data.decode())
+except:
+	subprocess.call(["yad", "--title", "yandOTP", "--text", "Failed to obtain valid json data from GnuPG output:\n\n" + error.decode(), "--button", "Close:1"])
+	sys.exit(1)
+
+# Arriving at this point without errores we use retrieved dictionary to generate a yad command that shows all available accounts to generate OTP codes from
+selectionlist = ["yad", "--title", "yandOTP", "--text", "Select an account to generate your OTP code", "--list", "--radiolist", "--column", "Select", "--column", "Provider", "--column", "Account", "--column", "seed:hd"]
+for service in dictionary:
+	selectionlist += ["FALSE", service["issuer"], service["label"], service["secret"]]
+
+# Reopen the yad list forever unless the user chooses to Exit on it.
+while True:
+	choosing = subprocess.Popen(selectionlist, stdout = subprocess.PIPE)
+	selection = choosing.communicate()[0].decode().split("|")
+
+	if choosing.returncode == 1:
+		sys.exit(0)
+	# Use oahtool to generate the code
+	generate = subprocess.Popen(["oathtool", "-b", "--totp", selection[3]], stdout = subprocess.PIPE)
+	pad = generate.communicate()[0].decode()
+
+	# Show it to the user
+	subprocess.call(["yad", "--title", "yandOTP", "--text", "TOTP code for " + selection[1] + " account " + selection[2] + " is " + pad, "--button", "Close:0"])
